@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: etc-burn-stats
+    runtime: static
+    buildCommand: npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /app.js
+        name: Cache-Control
+        value: public, max-age=300, must-revalidate
+      - path: /styles.css
+        name: Cache-Control
+        value: public, max-age=300, must-revalidate

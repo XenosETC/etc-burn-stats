@@ -1,0 +1,12 @@
+{
+  "name": "etc-burn-stats",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static ETC dead LP burn dashboard.",
+  "scripts": {
+    "start": "python -m http.server 8080 --bind 127.0.0.1",
+    "build": "node scripts/build-static.js",
+    "check": "node scripts/check-static.js"
+  },
+  "devDependencies": {}
+}

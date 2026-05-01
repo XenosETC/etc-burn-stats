@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ETC Burn Stats</title>
+    <meta
+      name="description"
+      content="Dead LP burn dashboard for Ethereum Classic meme coins and ETC projects."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%236ee7a8'/%3E%3Ctext x='32' y='39' font-size='18' text-anchor='middle' font-family='Arial' font-weight='700' fill='%23052014'%3EETC%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://etc.blockscout.com" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="ETC Burn Stats home">
+        <span class="brand-mark">ETC</span>
+        <span>Burn Stats</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#projects">Projects</a>
+        <a href="#matrix">Matrix</a>
+        <a href="#add">Add</a>
+        <a href="https://etc.blockscout.com/" rel="noreferrer" target="_blank">Blockscout</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Ethereum Classic liquidity transparency</p>
+          <h1>Dead LP burn stats for ETC projects and meme coins.</h1>
+          <p class="lede">
+            Track how much LP supply is sitting in burn addresses, compare project security
+            signals, copy contracts, and open the underlying ETC explorer receipts.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#projects">View live stats</a>
+            <a class="button ghost" href="#add">Check another LP</a>
+            <a class="button ghost" href="https://app.hebeswap.com/" rel="noreferrer" target="_blank">Open HebeSwap</a>
+          </div>
+        </div>
+        <div class="hero-panel" aria-label="Network summary">
+          <div>
+            <span class="panel-label">Network</span>
+            <strong>Ethereum Classic</strong>
+          </div>
+          <div>
+            <span class="panel-label">Source</span>
+            <strong>Blockscout API</strong>
+          </div>
+          <div>
+            <span class="panel-label">Burn wallets</span>
+            <strong>0x...dEaD + zero</strong>
+          </div>
+          <div>
+            <span class="panel-label">Preloaded</span>
+            <div class="token-strip" aria-label="Preloaded token artwork">
+              <img src="https://pupu-etc-premium-redesign.onrender.com/assets/logo.png" alt="PUPU" />
+              <img src="https://raw.githubusercontent.com/pepecoinclassicetc/Pepecoin-Classic/main/blockchains/ethereum-classic/assets/0xBa991144fFDbe47936703606A6e74194Db0DA8Aa/logo.png" alt="PEPE" />
+              <img src="https://assets.coingecko.com/coins/images/27241/small/1BED03B1-D87F-4E91-B24F-CDED9309D003.jpeg?1696526291" alt="SHIBC" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-band" aria-label="Portfolio burn summary">
+        <div>
+          <span class="metric-label">Tracked projects</span>
+          <strong id="trackedProjects">3</strong>
+        </div>
+        <div>
+          <span class="metric-label">Avg dead LP</span>
+          <strong id="avgBurned">Loading</strong>
+        </div>
+        <div>
+          <span class="metric-label">Best lock signal</span>
+          <strong id="bestSignal">Loading</strong>
+        </div>
+        <div>
+          <span class="metric-label">70%+ LP</span>
+          <strong id="totalBurned">Loading</strong>
+        </div>
+        <div>
+          <span class="metric-label">Last refresh</span>
+          <strong id="lastRefresh">Loading</strong>
+        </div>
+      </section>
+
+      <section id="projects" class="content-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Live project board</p>
+            <h2>Dead LP leaderboard</h2>
+          </div>
+          <button class="icon-button" id="refreshBtn" type="button" aria-label="Refresh stats" title="Refresh stats">
+            R
+          </button>
+        </div>
+        <div class="command-bar" aria-label="Project controls">
+          <label class="field search-field">
+            Search
+            <input id="searchInput" placeholder="Filter by name, symbol, or contract" autocomplete="off" />
+          </label>
+          <label class="field">
+            Sort
+            <select id="sortSelect">
+              <option value="burn-desc">Dead LP high to low</option>
+              <option value="burn-asc">Dead LP low to high</option>
+              <option value="holders-desc">Token holders high to low</option>
+              <option value="name-asc">Name A to Z</option>
+            </select>
+          </label>
+          <label class="switch">
+            <input id="strongOnlyInput" type="checkbox" />
+            <span>70%+ only</span>
+          </label>
+        </div>
+        <div id="projectGrid" class="project-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="matrix" class="content-section matrix-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Receipts view</p>
+            <h2>Project matrix</h2>
+          </div>
+        </div>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Dead LP</th>
+                <th>Token holders</th>
+                <th>LP holders</th>
+                <th>Receipts</th>
+              </tr>
+            </thead>
+            <tbody id="projectTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="add" class="content-section add-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Check another coin</p>
+            <h2>Add an ETC token + LP pair</h2>
+          </div>
+        </div>
+        <form id="projectForm" class="project-form">
+          <label class="field">
+            Project name
+            <input id="nameInput" name="name" placeholder="Example: PUPU" required />
+          </label>
+          <label class="field">
+            Token contract
+            <input
+              id="tokenInput"
+              name="token"
+              placeholder="0x..."
+              pattern="^0x[a-fA-F0-9]{40}$"
+              required
+            />
+          </label>
+          <label class="field">
+            LP token contract
+            <input
+              id="lpInput"
+              name="lp"
+              placeholder="0x..."
+              pattern="^0x[a-fA-F0-9]{40}$"
+              required
+            />
+          </label>
+          <button class="button primary" type="submit">Add project</button>
+          <button class="button ghost" id="resetProjectsBtn" type="button">Reset saved</button>
+        </form>
+        <p id="formMessage" class="form-message" role="status"></p>
+        <p class="form-note">
+          Projects added here stay in this browser. Burn percentage is LP held by known null
+          addresses divided by LP token total supply.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <span>ETC Burn Stats</span>
+      <span>Not financial advice. Verify contracts before trading.</span>
+    </footer>
+
+    <template id="projectTemplate">
+      <article class="project-card">
+        <div class="card-head">
+          <div class="token-avatar" aria-hidden="true">
+            <img class="token-image" alt="" />
+            <span class="token-fallback"></span>
+          </div>
+          <div>
+            <p class="project-symbol"></p>
+            <h3></h3>
+            <p class="pair-label"></p>
+          </div>
+          <span class="status-pill">Live</span>
+        </div>
+        <div class="burn-ring" role="img" aria-label="Dead LP percentage">
+          <span class="burn-percent">--</span>
+          <span>dead LP</span>
+        </div>
+        <div class="stats-list">
+          <div>
+            <span>LP burned</span>
+            <strong class="burned-amount">--</strong>
+          </div>
+          <div>
+            <span>LP supply</span>
+            <strong class="lp-supply">--</strong>
+          </div>
+          <div>
+            <span>Token holders</span>
+            <strong class="holders">--</strong>
+          </div>
+          <div>
+            <span>LP holders</span>
+            <strong class="lp-holders">--</strong>
+          </div>
+        </div>
+        <div class="address-list">
+          <div>
+            <span>Token</span>
+            <code class="token-address">--</code>
+            <button class="mini-button copy-token" type="button">Copy</button>
+          </div>
+          <div>
+            <span>LP</span>
+            <code class="lp-address">--</code>
+            <button class="mini-button copy-lp" type="button">Copy</button>
+          </div>
+        </div>
+        <div class="card-links">
+          <a class="token-link" target="_blank" rel="noreferrer">Token</a>
+          <a class="lp-link" target="_blank" rel="noreferrer">LP</a>
+          <a class="holders-link" target="_blank" rel="noreferrer">LP holders</a>
+          <a class="trade-link" href="https://app.hebeswap.com/" target="_blank" rel="noreferrer">Trade</a>
+        </div>
+        <p class="card-error"></p>
+      </article>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
