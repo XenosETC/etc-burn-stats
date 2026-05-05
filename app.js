@@ -1,4 +1,6 @@
 const API_BASE = "https://etc.blockscout.com/api/v2";
+const RPC_BASE = "https://etc.rivet.link";
+const WETC_ADDRESS = "0x82a618305706b14e7bcf2592d4b9324a366b6dad";
 const DEAD_ADDRESSES = new Set([
   "0x0000000000000000000000000000000000000000",
   "0x000000000000000000000000000000000000dead",
@@ -35,7 +37,7 @@ const els = {
   formMessage: document.querySelector("#formMessage"),
   grid: document.querySelector("#projectGrid"),
   heroTopBurn: document.querySelector("#heroTopBurn"),
-  heroTokenBurn: document.querySelector("#heroTokenBurn"),
+  heroEtcBurn: document.querySelector("#heroEtcBurn"),
   lastRefresh: document.querySelector("#lastRefresh"),
   refresh: document.querySelector("#refreshBtn"),
   reset: document.querySelector("#resetProjectsBtn"),
@@ -112,15 +114,65 @@ async function fetchBurnBalanceMap() {
   return balances;
 }
 
+async function rpcCall(method, params) {
+  const response = await fetch(RPC_BASE, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (!response.ok) throw new Error(`ETC RPC returned ${response.status}`);
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || "ETC RPC error");
+  return payload.result;
+}
+
+async function ethCall(to, data) {
+  return rpcCall("eth_call", [{ to, data }, "latest"]);
+}
+
+function decodeAddress(result) {
+  return `0x${result.slice(-40)}`.toLowerCase();
+}
+
+function decodeReserves(result) {
+  const clean = result.replace(/^0x/, "");
+  return {
+    reserve0: BigInt(`0x${clean.slice(0, 64)}`),
+    reserve1: BigInt(`0x${clean.slice(64, 128)}`),
+  };
+}
+
+async function fetchPairInfo(lpAddress) {
+  const [token0Result, token1Result, reservesResult] = await Promise.all([
+    ethCall(lpAddress, "0x0dfe1681"),
+    ethCall(lpAddress, "0xd21220a7"),
+    ethCall(lpAddress, "0x0902f1ac"),
+  ]);
+  const token0 = decodeAddress(token0Result);
+  const token1 = decodeAddress(token1Result);
+  const reserves = decodeReserves(reservesResult);
+  const etcReserve =
+    token0 === WETC_ADDRESS ? reserves.reserve0 : token1 === WETC_ADDRESS ? reserves.reserve1 : 0n;
+
+  return {
+    etcReserve,
+    hasEtcReserve: token0 === WETC_ADDRESS || token1 === WETC_ADDRESS,
+    token0,
+    token1,
+  };
+}
+
 async function readProject(project, burnBalances) {
-  const [tokenInfo, lpInfo] = await Promise.all([
+  const [tokenInfo, lpInfo, pairInfo] = await Promise.all([
     fetchJson(`/tokens/${project.token}`),
     fetchJson(`/tokens/${project.lp}`),
+    fetchPairInfo(project.lp),
   ]);
 
   const lpSupply = BigInt(lpInfo.total_supply || "0");
   const burned = burnBalances.get(project.lp.toLowerCase()) || 0n;
   const burnedPercent = lpSupply > 0n ? Number((burned * 1000000n) / lpSupply) / 10000 : 0;
+  const etcBurned = lpSupply > 0n ? (pairInfo.etcReserve * burned) / lpSupply : 0n;
   const tokenSupply = BigInt(tokenInfo.total_supply || "0");
   const tokenBurned = burnBalances.get(project.token.toLowerCase()) || 0n;
   const tokenBurnedPercent = tokenSupply > 0n ? Number((tokenBurned * 1000000n) / tokenSupply) / 10000 : 0;
@@ -133,6 +185,8 @@ async function readProject(project, burnBalances) {
     lpHolders: Number(lpInfo.holders_count || "0"),
     lpSupply,
     lpSymbol: lpInfo.symbol || "LP",
+    etcBurned,
+    hasEtcReserve: pairInfo.hasEtcReserve,
     tokenBurned,
     tokenBurnedPercent,
     tokenDecimals: Number(tokenInfo.decimals || 18),
@@ -173,7 +227,7 @@ function renderLoading() {
   els.etcTotalBurned.textContent = "Loading";
   els.avgBurned.textContent = "Loading";
   els.bestSignal.textContent = "Loading";
-  els.heroTokenBurn.textContent = "Loading";
+  els.heroEtcBurn.textContent = "Loading";
   els.totalBurned.textContent = "Loading";
   els.lastRefresh.textContent = "Loading";
   els.grid.innerHTML = projects
@@ -193,7 +247,7 @@ function renderLoading() {
       `,
     )
     .join("");
-  els.table.innerHTML = `<tr><td colspan="7">Loading project receipts...</td></tr>`;
+  els.table.innerHTML = `<tr><td colspan="8">Loading project receipts...</td></tr>`;
 }
 
 function render() {
@@ -232,7 +286,7 @@ function renderSummary(stats) {
     els.bestSignal.textContent = "No data";
     els.etcTotalBurned.textContent = "No data";
     els.heroTopBurn.textContent = "No data";
-    els.heroTokenBurn.textContent = "No data";
+    els.heroEtcBurn.textContent = "No data";
     els.totalBurned.textContent = "0 / 0";
     els.lastRefresh.textContent = "Failed";
     return;
@@ -241,16 +295,13 @@ function renderSummary(stats) {
   const avg = goodStats.reduce((total, item) => total + item.burnedPercent, 0) / goodStats.length;
   const best = goodStats.reduce((winner, item) => (item.burnedPercent > winner.burnedPercent ? item : winner), goodStats[0]);
   const strong = goodStats.filter((item) => item.burnedPercent >= 70).length;
-  const totalTokenSupply = goodStats.reduce((total, item) => total + item.tokenSupply, 0n);
-  const totalTokenBurned = goodStats.reduce((total, item) => total + item.tokenBurned, 0n);
-  const totalTokenBurnedPercent =
-    totalTokenSupply > 0n ? Number((totalTokenBurned * 1000000n) / totalTokenSupply) / 10000 : 0;
+  const totalEtcBurned = goodStats.reduce((total, item) => total + item.etcBurned, 0n);
 
-  els.etcTotalBurned.textContent = `${formatPercent(totalTokenBurnedPercent)}%`;
+  els.etcTotalBurned.textContent = `${formatEtc(totalEtcBurned)} ETC`;
   els.avgBurned.textContent = `${formatPercent(avg)}%`;
   els.bestSignal.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
   els.heroTopBurn.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
-  els.heroTokenBurn.textContent = `${formatPercent(totalTokenBurnedPercent)}%`;
+  els.heroEtcBurn.textContent = `${formatEtc(totalEtcBurned)} ETC`;
   els.totalBurned.textContent = `${strong} / ${goodStats.length}`;
   els.lastRefresh.textContent = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -332,6 +383,7 @@ function hydrateCard(card, stats) {
   card.querySelector(".burn-percent").textContent = `${formatPercent(stats.burnedPercent)}%`;
   card.querySelector(".burned-amount").textContent = `${formatToken(stats.burned, stats.decimals)} ${stats.lpSymbol}`;
   card.querySelector(".lp-supply").textContent = `${formatToken(stats.lpSupply, stats.decimals)} ${stats.lpSymbol}`;
+  card.querySelector(".etc-burned").textContent = stats.hasEtcReserve ? `${formatEtc(stats.etcBurned)} ETC` : "No WETC pair";
   card.querySelector(".token-burned").textContent = `${formatToken(stats.tokenBurned, stats.tokenDecimals)} ${stats.symbol}`;
   card.querySelector(".token-burn-percent").textContent = `${formatPercent(stats.tokenBurnedPercent)}%`;
   card.querySelector(".holders").textContent = formatNumber(stats.holders);
@@ -343,7 +395,7 @@ function hydrateCard(card, stats) {
 
 function renderTable(stats) {
   if (!stats.length) {
-    els.table.innerHTML = `<tr><td colspan="7">No rows match the current filters.</td></tr>`;
+    els.table.innerHTML = `<tr><td colspan="8">No rows match the current filters.</td></tr>`;
     return;
   }
 
@@ -353,7 +405,7 @@ function renderTable(stats) {
         return `
           <tr>
             <td>${escapeHtml(item.name)}</td>
-            <td colspan="5">${escapeHtml(item.error)}</td>
+            <td colspan="6">${escapeHtml(item.error)}</td>
             <td><a href="${blockscoutToken(item.lp)}" target="_blank" rel="noreferrer">LP</a></td>
           </tr>
         `;
@@ -368,6 +420,7 @@ function renderTable(stats) {
             </div>
           </td>
           <td>${formatPercent(item.burnedPercent)}%</td>
+          <td>${item.hasEtcReserve ? `${formatEtc(item.etcBurned)} ETC` : "No WETC pair"}</td>
           <td>${formatToken(item.tokenBurned, item.tokenDecimals)} ${escapeHtml(item.symbol)}</td>
           <td>${formatPercent(item.tokenBurnedPercent)}%</td>
           <td>${formatNumber(item.holders)}</td>
@@ -448,6 +501,10 @@ function formatToken(value, decimals) {
     notation: whole > 999999n ? "compact" : "standard",
   }).format(Number(whole));
   return fractionText && whole < 1000000n ? `${wholeText}.${fractionText}` : wholeText;
+}
+
+function formatEtc(value) {
+  return formatToken(value, 18);
 }
 
 function shortAddress(address) {
