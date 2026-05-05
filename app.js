@@ -4,7 +4,6 @@ const DEAD_ADDRESSES = new Set([
   "0x000000000000000000000000000000000000dead",
 ]);
 const STORAGE_KEY = "etc-burn-stats-projects";
-const MAX_HOLDER_PAGES = 100;
 
 const defaultProjects = [
   {
@@ -96,46 +95,40 @@ async function fetchJson(path, params = {}) {
   return response.json();
 }
 
-async function fetchAllHolders(address) {
-  const holders = [];
-  let nextPageParams = {};
+async function fetchBurnBalanceMap() {
+  const balances = new Map();
+  const burnWallets = [...DEAD_ADDRESSES];
 
-  for (let page = 0; page < MAX_HOLDER_PAGES; page += 1) {
-    const data = await fetchJson(`/tokens/${address}/holders`, nextPageParams);
-    holders.push(...(data.items || []));
-    if (!data.next_page_params) break;
-    nextPageParams = data.next_page_params;
-  }
+  const responses = await Promise.all(
+    burnWallets.map((address) => fetchJson(`/addresses/${address}/token-balances`)),
+  );
 
-  return holders;
+  responses.flat().forEach((row) => {
+    const token = row.token?.address_hash?.toLowerCase();
+    if (!token) return;
+    balances.set(token, (balances.get(token) || 0n) + BigInt(row.value || "0"));
+  });
+
+  return balances;
 }
 
-async function readProject(project) {
-  const [tokenInfo, lpInfo, tokenHolders, lpHolders] = await Promise.all([
+async function readProject(project, burnBalances) {
+  const [tokenInfo, lpInfo] = await Promise.all([
     fetchJson(`/tokens/${project.token}`),
     fetchJson(`/tokens/${project.lp}`),
-    fetchAllHolders(project.token),
-    fetchAllHolders(project.lp),
   ]);
 
   const lpSupply = BigInt(lpInfo.total_supply || "0");
-  const burned = lpHolders.reduce((total, holder) => {
-    const hash = holder.address?.hash?.toLowerCase();
-    return DEAD_ADDRESSES.has(hash) ? total + BigInt(holder.value || "0") : total;
-  }, 0n);
+  const burned = burnBalances.get(project.lp.toLowerCase()) || 0n;
   const burnedPercent = lpSupply > 0n ? Number((burned * 1000000n) / lpSupply) / 10000 : 0;
   const tokenSupply = BigInt(tokenInfo.total_supply || "0");
-  const tokenBurned = tokenHolders.reduce((total, holder) => {
-    const hash = holder.address?.hash?.toLowerCase();
-    return DEAD_ADDRESSES.has(hash) ? total + BigInt(holder.value || "0") : total;
-  }, 0n);
+  const tokenBurned = burnBalances.get(project.token.toLowerCase()) || 0n;
   const tokenBurnedPercent = tokenSupply > 0n ? Number((tokenBurned * 1000000n) / tokenSupply) / 10000 : 0;
 
   return {
     ...project,
     burned,
     burnedPercent,
-    holderPagesComplete: lpHolders.length,
     holders: Number(tokenInfo.holders_count || "0"),
     lpHolders: Number(lpInfo.holders_count || "0"),
     lpSupply,
@@ -158,7 +151,8 @@ async function refresh() {
   els.refresh.disabled = true;
   renderLoading();
 
-  const results = await Promise.allSettled(projects.map(readProject));
+  const burnBalances = await fetchBurnBalanceMap();
+  const results = await Promise.allSettled(projects.map((project) => readProject(project, burnBalances)));
   if (refreshId !== latestRefreshId) return;
 
   liveStats = results.map((result, index) => {
