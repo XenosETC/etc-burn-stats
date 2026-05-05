@@ -62,6 +62,7 @@
           <div class="stage-stat">
             <span>Top dead LP</span>
             <strong id="heroTopBurn">Loading</strong>
+            <small>ETC token burn: <b id="heroTokenBurn">Loading</b></small>
           </div>
           <div class="stage-grid">
             <div>
@@ -88,6 +89,10 @@
         <div>
           <span class="metric-label">Tracked projects</span>
           <strong id="trackedProjects">3</strong>
+        </div>
+        <div>
+          <span class="metric-label">ETC total burned</span>
+          <strong id="etcTotalBurned">Loading</strong>
         </div>
         <div>
           <span class="metric-label">Avg dead LP</span>
@@ -152,6 +157,8 @@
               <tr>
                 <th>Project</th>
                 <th>Dead LP</th>
+                <th>Token burned</th>
+                <th>Token burn</th>
                 <th>Token holders</th>
                 <th>LP holders</th>
                 <th>Receipts</th>
@@ -236,6 +243,14 @@
           <div>
             <span>LP supply</span>
             <strong class="lp-supply">--</strong>
+          </div>
+          <div>
+            <span>Token burned</span>
+            <strong class="token-burned">--</strong>
+          </div>
+          <div>
+            <span>Token burn</span>
+            <strong class="token-burn-percent">--</strong>
           </div>
           <div>
             <span>Token holders</span>

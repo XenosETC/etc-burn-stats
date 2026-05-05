@@ -4,7 +4,7 @@ const DEAD_ADDRESSES = new Set([
   "0x000000000000000000000000000000000000dead",
 ]);
 const STORAGE_KEY = "etc-burn-stats-projects";
-const MAX_HOLDER_PAGES = 20;
+const MAX_HOLDER_PAGES = 100;
 
 const defaultProjects = [
   {
@@ -31,10 +31,12 @@ const defaultProjects = [
 const els = {
   avgBurned: document.querySelector("#avgBurned"),
   bestSignal: document.querySelector("#bestSignal"),
+  etcTotalBurned: document.querySelector("#etcTotalBurned"),
   form: document.querySelector("#projectForm"),
   formMessage: document.querySelector("#formMessage"),
   grid: document.querySelector("#projectGrid"),
   heroTopBurn: document.querySelector("#heroTopBurn"),
+  heroTokenBurn: document.querySelector("#heroTokenBurn"),
   lastRefresh: document.querySelector("#lastRefresh"),
   refresh: document.querySelector("#refreshBtn"),
   reset: document.querySelector("#resetProjectsBtn"),
@@ -109,9 +111,10 @@ async function fetchAllHolders(address) {
 }
 
 async function readProject(project) {
-  const [tokenInfo, lpInfo, lpHolders] = await Promise.all([
+  const [tokenInfo, lpInfo, tokenHolders, lpHolders] = await Promise.all([
     fetchJson(`/tokens/${project.token}`),
     fetchJson(`/tokens/${project.lp}`),
+    fetchAllHolders(project.token),
     fetchAllHolders(project.lp),
   ]);
 
@@ -121,6 +124,12 @@ async function readProject(project) {
     return DEAD_ADDRESSES.has(hash) ? total + BigInt(holder.value || "0") : total;
   }, 0n);
   const burnedPercent = lpSupply > 0n ? Number((burned * 1000000n) / lpSupply) / 10000 : 0;
+  const tokenSupply = BigInt(tokenInfo.total_supply || "0");
+  const tokenBurned = tokenHolders.reduce((total, holder) => {
+    const hash = holder.address?.hash?.toLowerCase();
+    return DEAD_ADDRESSES.has(hash) ? total + BigInt(holder.value || "0") : total;
+  }, 0n);
+  const tokenBurnedPercent = tokenSupply > 0n ? Number((tokenBurned * 1000000n) / tokenSupply) / 10000 : 0;
 
   return {
     ...project,
@@ -131,6 +140,10 @@ async function readProject(project) {
     lpHolders: Number(lpInfo.holders_count || "0"),
     lpSupply,
     lpSymbol: lpInfo.symbol || "LP",
+    tokenBurned,
+    tokenBurnedPercent,
+    tokenDecimals: Number(tokenInfo.decimals || 18),
+    tokenSupply,
     symbol: tokenInfo.symbol || project.name,
     tokenName: tokenInfo.name || project.label || project.name,
     icon: tokenInfo.icon_url || project.icon || "",
@@ -163,8 +176,10 @@ async function refresh() {
 
 function renderLoading() {
   els.tracked.textContent = String(projects.length);
+  els.etcTotalBurned.textContent = "Loading";
   els.avgBurned.textContent = "Loading";
   els.bestSignal.textContent = "Loading";
+  els.heroTokenBurn.textContent = "Loading";
   els.totalBurned.textContent = "Loading";
   els.lastRefresh.textContent = "Loading";
   els.grid.innerHTML = projects
@@ -184,7 +199,7 @@ function renderLoading() {
       `,
     )
     .join("");
-  els.table.innerHTML = `<tr><td colspan="5">Loading project receipts...</td></tr>`;
+  els.table.innerHTML = `<tr><td colspan="7">Loading project receipts...</td></tr>`;
 }
 
 function render() {
@@ -221,7 +236,9 @@ function renderSummary(stats) {
   if (!goodStats.length) {
     els.avgBurned.textContent = "Offline";
     els.bestSignal.textContent = "No data";
+    els.etcTotalBurned.textContent = "No data";
     els.heroTopBurn.textContent = "No data";
+    els.heroTokenBurn.textContent = "No data";
     els.totalBurned.textContent = "0 / 0";
     els.lastRefresh.textContent = "Failed";
     return;
@@ -230,10 +247,16 @@ function renderSummary(stats) {
   const avg = goodStats.reduce((total, item) => total + item.burnedPercent, 0) / goodStats.length;
   const best = goodStats.reduce((winner, item) => (item.burnedPercent > winner.burnedPercent ? item : winner), goodStats[0]);
   const strong = goodStats.filter((item) => item.burnedPercent >= 70).length;
+  const totalTokenSupply = goodStats.reduce((total, item) => total + item.tokenSupply, 0n);
+  const totalTokenBurned = goodStats.reduce((total, item) => total + item.tokenBurned, 0n);
+  const totalTokenBurnedPercent =
+    totalTokenSupply > 0n ? Number((totalTokenBurned * 1000000n) / totalTokenSupply) / 10000 : 0;
 
+  els.etcTotalBurned.textContent = `${formatPercent(totalTokenBurnedPercent)}%`;
   els.avgBurned.textContent = `${formatPercent(avg)}%`;
   els.bestSignal.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
   els.heroTopBurn.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
+  els.heroTokenBurn.textContent = `${formatPercent(totalTokenBurnedPercent)}%`;
   els.totalBurned.textContent = `${strong} / ${goodStats.length}`;
   els.lastRefresh.textContent = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -315,6 +338,8 @@ function hydrateCard(card, stats) {
   card.querySelector(".burn-percent").textContent = `${formatPercent(stats.burnedPercent)}%`;
   card.querySelector(".burned-amount").textContent = `${formatToken(stats.burned, stats.decimals)} ${stats.lpSymbol}`;
   card.querySelector(".lp-supply").textContent = `${formatToken(stats.lpSupply, stats.decimals)} ${stats.lpSymbol}`;
+  card.querySelector(".token-burned").textContent = `${formatToken(stats.tokenBurned, stats.tokenDecimals)} ${stats.symbol}`;
+  card.querySelector(".token-burn-percent").textContent = `${formatPercent(stats.tokenBurnedPercent)}%`;
   card.querySelector(".holders").textContent = formatNumber(stats.holders);
   card.querySelector(".lp-holders").textContent = formatNumber(stats.lpHolders);
   card.querySelector(".status-pill").textContent = status.label;
@@ -324,7 +349,7 @@ function hydrateCard(card, stats) {
 
 function renderTable(stats) {
   if (!stats.length) {
-    els.table.innerHTML = `<tr><td colspan="5">No rows match the current filters.</td></tr>`;
+    els.table.innerHTML = `<tr><td colspan="7">No rows match the current filters.</td></tr>`;
     return;
   }
 
@@ -334,7 +359,7 @@ function renderTable(stats) {
         return `
           <tr>
             <td>${escapeHtml(item.name)}</td>
-            <td colspan="3">${escapeHtml(item.error)}</td>
+            <td colspan="5">${escapeHtml(item.error)}</td>
             <td><a href="${blockscoutToken(item.lp)}" target="_blank" rel="noreferrer">LP</a></td>
           </tr>
         `;
@@ -349,6 +374,8 @@ function renderTable(stats) {
             </div>
           </td>
           <td>${formatPercent(item.burnedPercent)}%</td>
+          <td>${formatToken(item.tokenBurned, item.tokenDecimals)} ${escapeHtml(item.symbol)}</td>
+          <td>${formatPercent(item.tokenBurnedPercent)}%</td>
           <td>${formatNumber(item.holders)}</td>
           <td>${formatNumber(item.lpHolders)}</td>
           <td>
