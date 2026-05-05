@@ -34,6 +34,7 @@ const els = {
   form: document.querySelector("#projectForm"),
   formMessage: document.querySelector("#formMessage"),
   grid: document.querySelector("#projectGrid"),
+  heroTopBurn: document.querySelector("#heroTopBurn"),
   lastRefresh: document.querySelector("#lastRefresh"),
   refresh: document.querySelector("#refreshBtn"),
   reset: document.querySelector("#resetProjectsBtn"),
@@ -220,6 +221,7 @@ function renderSummary(stats) {
   if (!goodStats.length) {
     els.avgBurned.textContent = "Offline";
     els.bestSignal.textContent = "No data";
+    els.heroTopBurn.textContent = "No data";
     els.totalBurned.textContent = "0 / 0";
     els.lastRefresh.textContent = "Failed";
     return;
@@ -231,6 +233,7 @@ function renderSummary(stats) {
 
   els.avgBurned.textContent = `${formatPercent(avg)}%`;
   els.bestSignal.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
+  els.heroTopBurn.textContent = `${best.symbol} ${formatPercent(best.burnedPercent)}%`;
   els.totalBurned.textContent = `${strong} / ${goodStats.length}`;
   els.lastRefresh.textContent = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
